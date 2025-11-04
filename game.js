@@ -160,13 +160,15 @@ class GomokuGame {
             this.board[move.row][move.col] = 0;
         }
 
-        // VCF搜索：寻找连续冲四获胜的序列
-        const vcfMove = this.searchVCF(2, 8);
-        if (vcfMove) return vcfMove;
+        // VCF搜索：只在候选移动较少时执行，避免搜索爆炸
+        // 限制搜索深度，防止早期游戏时性能问题
+        if (candidates.length <= 30) {
+            const vcfMove = this.searchVCF(2, 4); // 降低搜索深度到4
+            if (vcfMove) return vcfMove;
 
-        // 防守对手的VCF
-        const defenseVCF = this.searchVCF(1, 6);
-        if (defenseVCF) return defenseVCF;
+            const defenseVCF = this.searchVCF(1, 4); // 降低搜索深度到4
+            if (defenseVCF) return defenseVCF;
+        }
 
         // 移动排序：按威胁值排序，优化Alpha-Beta剪枝效率
         const sortedMoves = this.sortMovesByThreat(candidates);
@@ -628,6 +630,18 @@ class GomokuGame {
         const x = this.cellSize * (col + 1);
         const y = this.cellSize * (row + 1);
         const radius = this.cellSize * 0.4;
+        const isLastMove = this.moveHistory.length > 0 &&
+                          this.moveHistory[this.moveHistory.length - 1].row === row &&
+                          this.moveHistory[this.moveHistory.length - 1].col === col;
+
+        // 如果是最新落子，绘制外圈高亮
+        if (isLastMove) {
+            ctx.beginPath();
+            ctx.arc(x, y, radius + 4, 0, Math.PI * 2);
+            ctx.strokeStyle = player === 1 ? '#ff0000' : '#00ff00';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
 
         // 绘制棋子阴影
         ctx.beginPath();
@@ -658,15 +672,17 @@ class GomokuGame {
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // 标记最后一步
-        if (this.moveHistory.length > 0) {
-            const lastMove = this.moveHistory[this.moveHistory.length - 1];
-            if (lastMove.row === row && lastMove.col === col) {
-                ctx.beginPath();
-                ctx.arc(x, y, 5, 0, Math.PI * 2);
-                ctx.fillStyle = player === 1 ? '#fff' : '#000';
-                ctx.fill();
-            }
+        // 标记最后一步 - 在棋子中心画一个更明显的标记
+        if (isLastMove) {
+            // 绘制正方形标记
+            ctx.fillStyle = player === 1 ? '#ff0000' : '#00ff00';
+            const markSize = 8;
+            ctx.fillRect(x - markSize / 2, y - markSize / 2, markSize, markSize);
+
+            // 添加白色边框使标记更清晰
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x - markSize / 2, y - markSize / 2, markSize, markSize);
         }
     }
 
