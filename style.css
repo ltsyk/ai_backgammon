@@ -1,0 +1,229 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.container {
+    background: white;
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 800px;
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 20px;
+    font-size: 2.5em;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.game-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 10px;
+}
+
+.player-info {
+    display: flex;
+    gap: 30px;
+}
+
+.player {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: bold;
+    color: #555;
+}
+
+.piece {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.piece.black {
+    background: radial-gradient(circle at 30% 30%, #333, #000);
+}
+
+.piece.white {
+    background: radial-gradient(circle at 30% 30%, #fff, #ddd);
+    border: 1px solid #999;
+}
+
+.status-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.status {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #667eea;
+    padding: 8px 15px;
+    background: white;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.difficulty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.difficulty label {
+    font-weight: bold;
+    color: #555;
+}
+
+.difficulty select {
+    padding: 5px 10px;
+    border: 2px solid #667eea;
+    border-radius: 5px;
+    font-size: 1em;
+    cursor: pointer;
+    background: white;
+}
+
+.controls {
+    display: flex;
+    gap: 10px;
+}
+
+.btn {
+    padding: 10px 20px;
+    font-size: 1em;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    color: white;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.board-container {
+    display: flex;
+    justify-content: center;
+    margin: 20px 0;
+    background: #daa520;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.2);
+}
+
+#board {
+    cursor: pointer;
+    display: block;
+    background: linear-gradient(to bottom, #d4a574, #c69664);
+    border-radius: 5px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+#board:hover {
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
+}
+
+.instructions {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    margin-top: 20px;
+}
+
+.instructions h3 {
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.instructions ul {
+    list-style-position: inside;
+    color: #555;
+    line-height: 1.8;
+}
+
+.instructions li {
+    margin-left: 10px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .container {
+        padding: 15px;
+    }
+
+    h1 {
+        font-size: 1.8em;
+    }
+
+    .game-info {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .player-info {
+        justify-content: space-around;
+    }
+
+    #board {
+        width: 100%;
+        height: auto;
+    }
+
+    .controls {
+        width: 100%;
+    }
+
+    .btn {
+        flex: 1;
+    }
+}
+
+/* 获胜动画 */
+@keyframes celebrate {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.status.win {
+    animation: celebrate 0.5s ease-in-out 3;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}

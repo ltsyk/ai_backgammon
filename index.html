@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>五子棋 - 人机对战</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>五子棋游戏</h1>
+
+        <div class="game-info">
+            <div class="player-info">
+                <div class="player">
+                    <span class="piece black"></span>
+                    <span>玩家（黑棋）</span>
+                </div>
+                <div class="player">
+                    <span class="piece white"></span>
+                    <span>电脑（白棋）</span>
+                </div>
+            </div>
+
+            <div class="status-panel">
+                <div id="status" class="status">黑棋先手，请下棋</div>
+                <div class="difficulty">
+                    <label>难度：</label>
+                    <select id="difficulty">
+                        <option value="easy">简单</option>
+                        <option value="medium" selected>中等</option>
+                        <option value="hard">困难</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button id="restart" class="btn">重新开始</button>
+                <button id="undo" class="btn">悔棋</button>
+            </div>
+        </div>
+
+        <div class="board-container">
+            <canvas id="board" width="600" height="600"></canvas>
+        </div>
+
+        <div class="instructions">
+            <h3>游戏规则：</h3>
+            <ul>
+                <li>黑棋先手，玩家与电脑轮流下棋</li>
+                <li>在棋盘交叉点点击下棋</li>
+                <li>率先在横、竖、斜任意方向连成五子者获胜</li>
+                <li>可以选择难度和悔棋</li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
