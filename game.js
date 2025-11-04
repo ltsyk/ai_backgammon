@@ -15,7 +15,7 @@ class GomokuGame {
 
         // 性能优化：搜索时间限制
         this.searchStartTime = 0;
-        this.maxSearchTime = 3000; // 最多3秒
+        this.maxSearchTime = 5000; // 增强AI：最多5秒
 
         // 初始化画布
         this.canvas = document.getElementById('board');
@@ -139,19 +139,19 @@ class GomokuGame {
     getMediumMove() {
         const moveCount = this.moveHistory.length;
         // 根据棋子数量动态调整深度
-        const depth = moveCount < 10 ? 2 : moveCount < 20 ? 2 : 3;
+        const depth = moveCount < 8 ? 2 : moveCount < 16 ? 3 : 3;
         return this.minimaxSearch(depth);
     }
 
-    // 困难AI：使用深度Minimax + Alpha-Beta剪枝（动态深度）
+    // 困难AI：使用深度Minimax + Alpha-Beta剪枝（动态深度，增强版）
     getHardMove() {
         const moveCount = this.moveHistory.length;
-        // 根据棋子数量动态调整深度，早期降低深度
-        const depth = moveCount < 10 ? 2 : moveCount < 20 ? 3 : 4;
+        // 增强AI深度：早期3层，中期4层，后期5层
+        const depth = moveCount < 6 ? 3 : moveCount < 12 ? 4 : 5;
         return this.minimaxSearch(depth);
     }
 
-    // Minimax搜索主函数（优化版）
+    // Minimax搜索主函数（增强版）
     minimaxSearch(maxDepth) {
         this.searchStartTime = Date.now();
         const candidates = this.getCandidateMoves();
@@ -176,11 +176,20 @@ class GomokuGame {
             this.board[move.row][move.col] = 0;
         }
 
+        // 增强VCF搜索：只在候选较少且有威胁时执行
+        if (candidates.length <= 25 && this.moveHistory.length >= 8) {
+            const vcfMove = this.searchVCF(2, 3);
+            if (vcfMove) return vcfMove;
+
+            const defenseVCF = this.searchVCF(1, 3);
+            if (defenseVCF) return defenseVCF;
+        }
+
         // 移动排序：按威胁值排序，优化Alpha-Beta剪枝效率
         const sortedMoves = this.sortMovesByThreat(candidates);
 
-        // 限制搜索的移动数量，只考虑最优的前20个
-        const topMoves = sortedMoves.slice(0, Math.min(20, sortedMoves.length));
+        // 增强：扩大搜索范围，考虑更多候选移动
+        const topMoves = sortedMoves.slice(0, Math.min(30, sortedMoves.length));
 
         let bestMove = topMoves[0];
         let bestScore = -Infinity;
@@ -243,8 +252,8 @@ class GomokuGame {
 
         const candidates = this.getCandidateMoves();
 
-        // 限制候选移动数量以提高性能
-        const limitedCandidates = candidates.slice(0, Math.min(15, candidates.length));
+        // 增强：扩大候选移动数量
+        const limitedCandidates = candidates.slice(0, Math.min(20, candidates.length));
 
         if (isMaximizing) {
             let maxScore = -Infinity;
@@ -547,8 +556,9 @@ class GomokuGame {
 
     getCandidateMoves() {
         const candidates = new Set();
-        // 性能优化：将搜索范围从2降到1，大幅减少候选移动数量
-        const range = 1;
+        // 增强：动态调整搜索范围，早期用1，中后期用2
+        const moveCount = this.moveHistory.length;
+        const range = moveCount < 10 ? 1 : 2;
 
         for (let i = 0; i < this.boardSize; i++) {
             for (let j = 0; j < this.boardSize; j++) {
@@ -682,9 +692,16 @@ class GomokuGame {
         const x = this.cellSize * (col + 1);
         const y = this.cellSize * (row + 1);
         const radius = this.cellSize * 0.4;
-        const isLastMove = this.moveHistory.length > 0 &&
-                          this.moveHistory[this.moveHistory.length - 1].row === row &&
-                          this.moveHistory[this.moveHistory.length - 1].col === col;
+
+        // 检查是否是该颜色的最新落子
+        let isLastMoveOfColor = false;
+        for (let i = this.moveHistory.length - 1; i >= 0; i--) {
+            const move = this.moveHistory[i];
+            if (move.player === player) {
+                isLastMoveOfColor = (move.row === row && move.col === col);
+                break;
+            }
+        }
 
         // 绘制棋子阴影
         ctx.beginPath();
@@ -715,11 +732,11 @@ class GomokuGame {
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // 标记最后一步 - 在棋子中心画一个简洁的白色圆点
-        if (isLastMove) {
+        // 标记该颜色的最新落子 - 黑棋用白色标记，白棋用黑色标记
+        if (isLastMoveOfColor) {
             ctx.beginPath();
             ctx.arc(x, y, 5, 0, Math.PI * 2);
-            ctx.fillStyle = '#fff';
+            ctx.fillStyle = player === 1 ? '#fff' : '#000';
             ctx.fill();
         }
     }
