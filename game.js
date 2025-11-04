@@ -126,21 +126,21 @@ class GomokuGame {
         return emptyCells[Math.floor(Math.random() * emptyCells.length)];
     }
 
-    // 中等AI：基于评估函数
+    // 中等AI：使用Minimax算法（深度2）
     getMediumMove() {
-        return this.getAdvancedMove(false);
+        return this.minimaxSearch(2);
     }
 
-    // 困难AI：更深度的搜索
+    // 困难AI：使用深度Minimax + Alpha-Beta剪枝（深度4）
     getHardMove() {
-        return this.getAdvancedMove(true);
+        return this.minimaxSearch(4);
     }
 
-    // 高级AI算法
-    getAdvancedMove(isHard) {
+    // Minimax搜索主函数
+    minimaxSearch(maxDepth) {
         const candidates = this.getCandidateMoves();
 
-        // 1. 检查AI是否能直接获胜（五连）
+        // 即时获胜检查
         for (const move of candidates) {
             this.board[move.row][move.col] = 2;
             if (this.checkWin(move.row, move.col)) {
@@ -150,7 +150,7 @@ class GomokuGame {
             this.board[move.row][move.col] = 0;
         }
 
-        // 2. 检查是否需要防守（阻止玩家获胜）
+        // 即时防守检查
         for (const move of candidates) {
             this.board[move.row][move.col] = 1;
             if (this.checkWin(move.row, move.col)) {
@@ -160,80 +160,234 @@ class GomokuGame {
             this.board[move.row][move.col] = 0;
         }
 
-        // 3. 检查AI是否能形成活四（必胜）
-        for (const move of candidates) {
-            if (this.canFormLiveFour(move.row, move.col, 2)) {
-                return move;
-            }
-        }
+        // VCF搜索：寻找连续冲四获胜的序列
+        const vcfMove = this.searchVCF(2, 8);
+        if (vcfMove) return vcfMove;
 
-        // 4. 检查是否需要防守玩家的活四
-        for (const move of candidates) {
-            if (this.canFormLiveFour(move.row, move.col, 1)) {
-                return move;
-            }
-        }
+        // 防守对手的VCF
+        const defenseVCF = this.searchVCF(1, 6);
+        if (defenseVCF) return defenseVCF;
 
-        // 5. 检查AI是否能形成双活三或活三+冲四
-        if (isHard) {
-            for (const move of candidates) {
-                if (this.canFormDoubleThree(move.row, move.col, 2)) {
-                    return move;
-                }
-            }
+        // 移动排序：按威胁值排序，优化Alpha-Beta剪枝效率
+        const sortedMoves = this.sortMovesByThreat(candidates);
 
-            // 6. 防守玩家的双活三
-            for (const move of candidates) {
-                if (this.canFormDoubleThree(move.row, move.col, 1)) {
-                    return move;
-                }
-            }
-        }
-
-        // 7. 使用评估函数选择最佳位置
+        let bestMove = sortedMoves[0];
         let bestScore = -Infinity;
-        let bestMove = null;
+        let alpha = -Infinity;
+        const beta = Infinity;
 
-        for (const move of candidates) {
-            const score = this.evaluateMoveComprehensive(move.row, move.col, isHard);
+        for (const move of sortedMoves) {
+            this.board[move.row][move.col] = 2;
+            const score = this.minimax(maxDepth - 1, false, alpha, beta);
+            this.board[move.row][move.col] = 0;
 
             if (score > bestScore) {
                 bestScore = score;
                 bestMove = move;
             }
+            alpha = Math.max(alpha, score);
         }
 
-        return bestMove || this.getEasyMove();
+        return bestMove;
     }
 
-    // 检查能否形成活四
-    canFormLiveFour(row, col, player) {
+    // Minimax算法实现（带Alpha-Beta剪枝）
+    minimax(depth, isMaximizing, alpha, beta) {
+        // 检查游戏结束状态
+        const gameState = this.evaluateGameState();
+        if (gameState !== null) return gameState;
+
+        if (depth === 0) {
+            return this.evaluateBoardState();
+        }
+
+        const candidates = this.getCandidateMoves();
+
+        if (isMaximizing) {
+            let maxScore = -Infinity;
+            for (const move of candidates) {
+                this.board[move.row][move.col] = 2;
+                const score = this.minimax(depth - 1, false, alpha, beta);
+                this.board[move.row][move.col] = 0;
+
+                maxScore = Math.max(maxScore, score);
+                alpha = Math.max(alpha, score);
+                if (beta <= alpha) break; // Beta剪枝
+            }
+            return maxScore;
+        } else {
+            let minScore = Infinity;
+            for (const move of candidates) {
+                this.board[move.row][move.col] = 1;
+                const score = this.minimax(depth - 1, true, alpha, beta);
+                this.board[move.row][move.col] = 0;
+
+                minScore = Math.min(minScore, score);
+                beta = Math.min(beta, score);
+                if (beta <= alpha) break; // Alpha剪枝
+            }
+            return minScore;
+        }
+    }
+
+    // VCF搜索：Victory by Continuous Four（连续冲四获胜）
+    searchVCF(player, maxDepth) {
+        if (maxDepth <= 0) return null;
+
+        const candidates = this.getCandidateMoves();
+
+        for (const move of candidates) {
+            this.board[move.row][move.col] = player;
+
+            // 检查是否形成冲四或活四
+            const threats = this.getThreatLevel(move.row, move.col, player);
+
+            if (threats.winningMove) {
+                this.board[move.row][move.col] = 0;
+                return move;
+            }
+
+            if (threats.liveFour || threats.rushFour) {
+                // 模拟对手防守
+                const defenses = this.getDefenseMoves(move.row, move.col, player);
+                let allDefensesFail = true;
+
+                for (const defense of defenses) {
+                    if (this.board[defense.row][defense.col] !== 0) continue;
+
+                    this.board[defense.row][defense.col] = 3 - player; // 对手
+                    const nextVCF = this.searchVCF(player, maxDepth - 1);
+                    this.board[defense.row][defense.col] = 0;
+
+                    if (!nextVCF) {
+                        allDefensesFail = false;
+                        break;
+                    }
+                }
+
+                this.board[move.row][move.col] = 0;
+                if (allDefensesFail && defenses.length > 0) {
+                    return move;
+                }
+            } else {
+                this.board[move.row][move.col] = 0;
+            }
+        }
+
+        return null;
+    }
+
+    // 获取防守位置
+    getDefenseMoves(row, col, attackPlayer) {
+        const defenses = [];
         const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
 
         for (const [dx, dy] of directions) {
-            const pattern = this.getLinePattern(row, col, dx, dy, player);
-            // 活四：两端都没有被堵住的四连
-            if (pattern.count === 4 && pattern.openEnds === 2) {
-                return true;
+            // 正方向
+            for (let i = 1; i <= 4; i++) {
+                const r = row + dx * i;
+                const c = col + dy * i;
+                if (this.isInBounds(r, c) && this.board[r][c] === 0) {
+                    defenses.push({ row: r, col: c });
+                }
+                if (!this.isInBounds(r, c) || this.board[r][c] !== attackPlayer) break;
+            }
+
+            // 反方向
+            for (let i = 1; i <= 4; i++) {
+                const r = row - dx * i;
+                const c = col - dy * i;
+                if (this.isInBounds(r, c) && this.board[r][c] === 0) {
+                    defenses.push({ row: r, col: c });
+                }
+                if (!this.isInBounds(r, c) || this.board[r][c] !== attackPlayer) break;
             }
         }
-        return false;
+
+        return defenses;
     }
 
-    // 检查能否形成双活三
-    canFormDoubleThree(row, col, player) {
+    // 按威胁值排序移动
+    sortMovesByThreat(moves) {
+        return moves.map(move => {
+            this.board[move.row][move.col] = 2;
+            const aiScore = this.evaluatePositionScore(move.row, move.col, 2);
+            this.board[move.row][move.col] = 1;
+            const humanScore = this.evaluatePositionScore(move.row, move.col, 1);
+            this.board[move.row][move.col] = 0;
+
+            return {
+                ...move,
+                score: aiScore + humanScore * 1.1
+            };
+        }).sort((a, b) => b.score - a.score);
+    }
+
+    // 评估游戏状态（胜/负/平）
+    evaluateGameState() {
+        // 检查AI是否获胜
+        for (let i = 0; i < this.boardSize; i++) {
+            for (let j = 0; j < this.boardSize; j++) {
+                if (this.board[i][j] === 2) {
+                    if (this.checkWin(i, j)) return 100000;
+                }
+                if (this.board[i][j] === 1) {
+                    if (this.checkWin(i, j)) return -100000;
+                }
+            }
+        }
+        return null;
+    }
+
+    // 评估整个棋盘状态
+    evaluateBoardState() {
+        let score = 0;
+
+        // 评估所有棋子的价值
+        for (let i = 0; i < this.boardSize; i++) {
+            for (let j = 0; j < this.boardSize; j++) {
+                if (this.board[i][j] === 2) {
+                    score += this.evaluatePositionScore(i, j, 2);
+                } else if (this.board[i][j] === 1) {
+                    score -= this.evaluatePositionScore(i, j, 1) * 1.1;
+                }
+            }
+        }
+
+        return score;
+    }
+
+    // 评估单个位置的得分
+    evaluatePositionScore(row, col, player) {
         const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
-        let liveThreeCount = 0;
+        let totalScore = 0;
 
         for (const [dx, dy] of directions) {
             const pattern = this.getLinePattern(row, col, dx, dy, player);
-            // 活三：两端都没有被堵住的三连
-            if (pattern.count === 3 && pattern.openEnds === 2) {
-                liveThreeCount++;
-            }
+            totalScore += this.getPatternScore(pattern, true);
         }
 
-        return liveThreeCount >= 2;
+        return totalScore;
+    }
+
+    // 获取威胁等级
+    getThreatLevel(row, col, player) {
+        const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
+        let liveFour = false;
+        let rushFour = false;
+        let liveThree = 0;
+        let winningMove = false;
+
+        for (const [dx, dy] of directions) {
+            const pattern = this.getLinePattern(row, col, dx, dy, player);
+
+            if (pattern.count >= 5) winningMove = true;
+            if (pattern.count === 4 && pattern.openEnds === 2) liveFour = true;
+            if (pattern.count === 4 && pattern.openEnds === 1) rushFour = true;
+            if (pattern.count === 3 && pattern.openEnds === 2) liveThree++;
+        }
+
+        return { winningMove, liveFour, rushFour, liveThree };
     }
 
     // 获取某个方向的棋型模式
@@ -299,34 +453,6 @@ class GomokuGame {
         if (!blocked) openEnds++;
 
         return { count, openEnds, spaces };
-    }
-
-    // 综合评估一个位置
-    evaluateMoveComprehensive(row, col, isHard) {
-        let aiScore = this.evaluatePlayerAtPosition(row, col, 2, isHard);
-        let humanScore = this.evaluatePlayerAtPosition(row, col, 1, isHard);
-
-        // 防守比进攻更重要一些
-        return aiScore + humanScore * 1.2;
-    }
-
-    // 评估某个玩家在某个位置的得分
-    evaluatePlayerAtPosition(row, col, player, isHard) {
-        const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
-        let totalScore = 0;
-
-        for (const [dx, dy] of directions) {
-            const pattern = this.getLinePattern(row, col, dx, dy, player);
-            totalScore += this.getPatternScore(pattern, isHard);
-        }
-
-        // 位置奖励：中心位置更有价值
-        const centerRow = Math.floor(this.boardSize / 2);
-        const centerCol = Math.floor(this.boardSize / 2);
-        const distanceFromCenter = Math.abs(row - centerRow) + Math.abs(col - centerCol);
-        totalScore += (this.boardSize - distanceFromCenter) * 2;
-
-        return totalScore;
     }
 
     // 根据棋型模式评分
