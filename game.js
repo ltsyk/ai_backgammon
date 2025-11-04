@@ -53,8 +53,10 @@ class GomokuGame {
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        const col = Math.round((x - this.cellSize / 2) / this.cellSize);
-        const row = Math.round((y - this.cellSize / 2) / this.cellSize);
+        // 修复：正确计算点击位置到棋盘坐标的映射
+        // 棋盘第一个交叉点在 (cellSize, cellSize)
+        const col = Math.round(x / this.cellSize) - 1;
+        const row = Math.round(y / this.cellSize) - 1;
 
         if (this.isValidMove(row, col)) {
             this.makeMove(row, col);
@@ -126,40 +128,29 @@ class GomokuGame {
 
     // 中等AI：基于评估函数
     getMediumMove() {
-        return this.getBestMove(2);
+        return this.getAdvancedMove(false);
     }
 
     // 困难AI：更深度的搜索
     getHardMove() {
-        return this.getBestMove(3);
+        return this.getAdvancedMove(true);
     }
 
-    getBestMove(depth) {
-        let bestScore = -Infinity;
-        let bestMove = null;
-
-        // 获取候选位置（在已有棋子周围）
+    // 高级AI算法
+    getAdvancedMove(isHard) {
         const candidates = this.getCandidateMoves();
 
+        // 1. 检查AI是否能直接获胜（五连）
         for (const move of candidates) {
             this.board[move.row][move.col] = 2;
-
-            // 检查是否能直接获胜
             if (this.checkWin(move.row, move.col)) {
                 this.board[move.row][move.col] = 0;
                 return move;
             }
-
-            const score = this.evaluatePosition(move.row, move.col, 2);
             this.board[move.row][move.col] = 0;
-
-            if (score > bestScore) {
-                bestScore = score;
-                bestMove = move;
-            }
         }
 
-        // 检查是否需要防守
+        // 2. 检查是否需要防守（阻止玩家获胜）
         for (const move of candidates) {
             this.board[move.row][move.col] = 1;
             if (this.checkWin(move.row, move.col)) {
@@ -169,7 +160,210 @@ class GomokuGame {
             this.board[move.row][move.col] = 0;
         }
 
+        // 3. 检查AI是否能形成活四（必胜）
+        for (const move of candidates) {
+            if (this.canFormLiveFour(move.row, move.col, 2)) {
+                return move;
+            }
+        }
+
+        // 4. 检查是否需要防守玩家的活四
+        for (const move of candidates) {
+            if (this.canFormLiveFour(move.row, move.col, 1)) {
+                return move;
+            }
+        }
+
+        // 5. 检查AI是否能形成双活三或活三+冲四
+        if (isHard) {
+            for (const move of candidates) {
+                if (this.canFormDoubleThree(move.row, move.col, 2)) {
+                    return move;
+                }
+            }
+
+            // 6. 防守玩家的双活三
+            for (const move of candidates) {
+                if (this.canFormDoubleThree(move.row, move.col, 1)) {
+                    return move;
+                }
+            }
+        }
+
+        // 7. 使用评估函数选择最佳位置
+        let bestScore = -Infinity;
+        let bestMove = null;
+
+        for (const move of candidates) {
+            const score = this.evaluateMoveComprehensive(move.row, move.col, isHard);
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestMove = move;
+            }
+        }
+
         return bestMove || this.getEasyMove();
+    }
+
+    // 检查能否形成活四
+    canFormLiveFour(row, col, player) {
+        const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
+
+        for (const [dx, dy] of directions) {
+            const pattern = this.getLinePattern(row, col, dx, dy, player);
+            // 活四：两端都没有被堵住的四连
+            if (pattern.count === 4 && pattern.openEnds === 2) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // 检查能否形成双活三
+    canFormDoubleThree(row, col, player) {
+        const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
+        let liveThreeCount = 0;
+
+        for (const [dx, dy] of directions) {
+            const pattern = this.getLinePattern(row, col, dx, dy, player);
+            // 活三：两端都没有被堵住的三连
+            if (pattern.count === 3 && pattern.openEnds === 2) {
+                liveThreeCount++;
+            }
+        }
+
+        return liveThreeCount >= 2;
+    }
+
+    // 获取某个方向的棋型模式
+    getLinePattern(row, col, dx, dy, player) {
+        let count = 1;  // 包含当前位置
+        let openEnds = 0;  // 开放端点数
+        let spaces = 0;  // 空位数量
+
+        // 正方向检查
+        let blocked = false;
+        let hasSpace = false;
+        for (let i = 1; i <= 5; i++) {
+            const newRow = row + dx * i;
+            const newCol = col + dy * i;
+
+            if (!this.isInBounds(newRow, newCol)) {
+                blocked = true;
+                break;
+            }
+
+            if (this.board[newRow][newCol] === player) {
+                count++;
+            } else if (this.board[newRow][newCol] === 0) {
+                if (!hasSpace) {
+                    hasSpace = true;
+                    spaces++;
+                } else {
+                    break;
+                }
+            } else {
+                blocked = true;
+                break;
+            }
+        }
+        if (!blocked) openEnds++;
+
+        // 反方向检查
+        blocked = false;
+        hasSpace = false;
+        for (let i = 1; i <= 5; i++) {
+            const newRow = row - dx * i;
+            const newCol = col - dy * i;
+
+            if (!this.isInBounds(newRow, newCol)) {
+                blocked = true;
+                break;
+            }
+
+            if (this.board[newRow][newCol] === player) {
+                count++;
+            } else if (this.board[newRow][newCol] === 0) {
+                if (!hasSpace) {
+                    hasSpace = true;
+                    spaces++;
+                } else {
+                    break;
+                }
+            } else {
+                blocked = true;
+                break;
+            }
+        }
+        if (!blocked) openEnds++;
+
+        return { count, openEnds, spaces };
+    }
+
+    // 综合评估一个位置
+    evaluateMoveComprehensive(row, col, isHard) {
+        let aiScore = this.evaluatePlayerAtPosition(row, col, 2, isHard);
+        let humanScore = this.evaluatePlayerAtPosition(row, col, 1, isHard);
+
+        // 防守比进攻更重要一些
+        return aiScore + humanScore * 1.2;
+    }
+
+    // 评估某个玩家在某个位置的得分
+    evaluatePlayerAtPosition(row, col, player, isHard) {
+        const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
+        let totalScore = 0;
+
+        for (const [dx, dy] of directions) {
+            const pattern = this.getLinePattern(row, col, dx, dy, player);
+            totalScore += this.getPatternScore(pattern, isHard);
+        }
+
+        // 位置奖励：中心位置更有价值
+        const centerRow = Math.floor(this.boardSize / 2);
+        const centerCol = Math.floor(this.boardSize / 2);
+        const distanceFromCenter = Math.abs(row - centerRow) + Math.abs(col - centerCol);
+        totalScore += (this.boardSize - distanceFromCenter) * 2;
+
+        return totalScore;
+    }
+
+    // 根据棋型模式评分
+    getPatternScore(pattern, isHard) {
+        const { count, openEnds, spaces } = pattern;
+
+        // 五连
+        if (count >= 5) return 1000000;
+
+        // 活四（两端开放的四连）
+        if (count === 4 && openEnds === 2) return 100000;
+
+        // 冲四（一端开放的四连）
+        if (count === 4 && openEnds === 1) return 10000;
+
+        // 活三（两端开放的三连）
+        if (count === 3 && openEnds === 2) return 5000;
+
+        // 眠三（一端开放的三连）
+        if (count === 3 && openEnds === 1) return 500;
+
+        // 活二（两端开放的二连）
+        if (count === 2 && openEnds === 2) return 300;
+
+        // 眠二（一端开放的二连）
+        if (count === 2 && openEnds === 1) return 50;
+
+        // 活一
+        if (count === 1 && openEnds === 2) return 20;
+
+        // 困难模式下，考虑跳跃式连接
+        if (isHard && spaces > 0) {
+            if (count === 3 && openEnds > 0) return 400;
+            if (count === 2 && openEnds === 2) return 150;
+        }
+
+        return 10;
     }
 
     getCandidateMoves() {
@@ -203,72 +397,6 @@ class GomokuGame {
             const [row, col] = pos.split(',').map(Number);
             return { row, col };
         });
-    }
-
-    evaluatePosition(row, col, player) {
-        let score = 0;
-        const directions = [
-            [0, 1],   // 横
-            [1, 0],   // 竖
-            [1, 1],   // 斜
-            [1, -1]   // 反斜
-        ];
-
-        for (const [dx, dy] of directions) {
-            const count = this.countLine(row, col, dx, dy, player);
-            score += this.getLineScore(count);
-        }
-
-        return score;
-    }
-
-    countLine(row, col, dx, dy, player) {
-        let count = 1;
-        let empty = 0;
-
-        // 正方向
-        for (let i = 1; i < 5; i++) {
-            const newRow = row + dx * i;
-            const newCol = col + dy * i;
-            if (!this.isInBounds(newRow, newCol)) break;
-            if (this.board[newRow][newCol] === player) {
-                count++;
-            } else if (this.board[newRow][newCol] === 0) {
-                empty++;
-                break;
-            } else {
-                break;
-            }
-        }
-
-        // 反方向
-        for (let i = 1; i < 5; i++) {
-            const newRow = row - dx * i;
-            const newCol = col - dy * i;
-            if (!this.isInBounds(newRow, newCol)) break;
-            if (this.board[newRow][newCol] === player) {
-                count++;
-            } else if (this.board[newRow][newCol] === 0) {
-                empty++;
-                break;
-            } else {
-                break;
-            }
-        }
-
-        return { count, empty };
-    }
-
-    getLineScore(lineInfo) {
-        const { count, empty } = lineInfo;
-
-        if (count >= 5) return 100000;
-        if (count === 4 && empty > 0) return 10000;
-        if (count === 3 && empty > 0) return 1000;
-        if (count === 2 && empty > 0) return 100;
-        if (count === 1 && empty > 0) return 10;
-
-        return 0;
     }
 
     isInBounds(row, col) {
