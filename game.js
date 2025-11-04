@@ -9,6 +9,14 @@ class GomokuGame {
         this.moveHistory = [];
         this.difficulty = 'medium';
 
+        // 性能优化：置换表缓存
+        this.transpositionTable = new Map();
+        this.maxCacheSize = 100000;
+
+        // 性能优化：搜索时间限制
+        this.searchStartTime = 0;
+        this.maxSearchTime = 3000; // 最多3秒
+
         // 初始化画布
         this.canvas = document.getElementById('board');
         this.ctx = this.canvas.getContext('2d');
@@ -34,6 +42,7 @@ class GomokuGame {
         this.currentPlayer = 1;
         this.gameOver = false;
         this.moveHistory = [];
+        this.transpositionTable.clear(); // 清空缓存
         this.updateStatus('黑棋先手，请下棋');
     }
 
@@ -126,18 +135,25 @@ class GomokuGame {
         return emptyCells[Math.floor(Math.random() * emptyCells.length)];
     }
 
-    // 中等AI：使用Minimax算法（深度2）
+    // 中等AI：使用Minimax算法（动态深度）
     getMediumMove() {
-        return this.minimaxSearch(2);
+        const moveCount = this.moveHistory.length;
+        // 根据棋子数量动态调整深度
+        const depth = moveCount < 10 ? 2 : moveCount < 20 ? 2 : 3;
+        return this.minimaxSearch(depth);
     }
 
-    // 困难AI：使用深度Minimax + Alpha-Beta剪枝（深度4）
+    // 困难AI：使用深度Minimax + Alpha-Beta剪枝（动态深度）
     getHardMove() {
-        return this.minimaxSearch(4);
+        const moveCount = this.moveHistory.length;
+        // 根据棋子数量动态调整深度，早期降低深度
+        const depth = moveCount < 10 ? 2 : moveCount < 20 ? 3 : 4;
+        return this.minimaxSearch(depth);
     }
 
-    // Minimax搜索主函数
+    // Minimax搜索主函数（优化版）
     minimaxSearch(maxDepth) {
+        this.searchStartTime = Date.now();
         const candidates = this.getCandidateMoves();
 
         // 即时获胜检查
@@ -160,25 +176,23 @@ class GomokuGame {
             this.board[move.row][move.col] = 0;
         }
 
-        // VCF搜索：只在候选移动较少时执行，避免搜索爆炸
-        // 限制搜索深度，防止早期游戏时性能问题
-        if (candidates.length <= 30) {
-            const vcfMove = this.searchVCF(2, 4); // 降低搜索深度到4
-            if (vcfMove) return vcfMove;
-
-            const defenseVCF = this.searchVCF(1, 4); // 降低搜索深度到4
-            if (defenseVCF) return defenseVCF;
-        }
-
         // 移动排序：按威胁值排序，优化Alpha-Beta剪枝效率
         const sortedMoves = this.sortMovesByThreat(candidates);
 
-        let bestMove = sortedMoves[0];
+        // 限制搜索的移动数量，只考虑最优的前20个
+        const topMoves = sortedMoves.slice(0, Math.min(20, sortedMoves.length));
+
+        let bestMove = topMoves[0];
         let bestScore = -Infinity;
         let alpha = -Infinity;
         const beta = Infinity;
 
-        for (const move of sortedMoves) {
+        for (const move of topMoves) {
+            // 检查时间限制
+            if (Date.now() - this.searchStartTime > this.maxSearchTime) {
+                break;
+            }
+
             this.board[move.row][move.col] = 2;
             const score = this.minimax(maxDepth - 1, false, alpha, beta);
             this.board[move.row][move.col] = 0;
@@ -193,21 +207,48 @@ class GomokuGame {
         return bestMove;
     }
 
-    // Minimax算法实现（带Alpha-Beta剪枝）
+    // 生成棋盘哈希键（用于置换表）
+    getBoardHash() {
+        let hash = '';
+        for (let i = 0; i < this.boardSize; i++) {
+            for (let j = 0; j < this.boardSize; j++) {
+                hash += this.board[i][j];
+            }
+        }
+        return hash;
+    }
+
+    // Minimax算法实现（带Alpha-Beta剪枝和置换表优化）
     minimax(depth, isMaximizing, alpha, beta) {
+        // 时间限制检查
+        if (Date.now() - this.searchStartTime > this.maxSearchTime) {
+            return 0;
+        }
+
+        // 检查置换表
+        const boardHash = this.getBoardHash();
+        const cacheKey = `${boardHash}_${depth}_${isMaximizing}`;
+        if (this.transpositionTable.has(cacheKey)) {
+            return this.transpositionTable.get(cacheKey);
+        }
+
         // 检查游戏结束状态
         const gameState = this.evaluateGameState();
         if (gameState !== null) return gameState;
 
         if (depth === 0) {
-            return this.evaluateBoardState();
+            const score = this.evaluateBoardState();
+            return score;
         }
 
         const candidates = this.getCandidateMoves();
 
+        // 限制候选移动数量以提高性能
+        const limitedCandidates = candidates.slice(0, Math.min(15, candidates.length));
+
         if (isMaximizing) {
             let maxScore = -Infinity;
-            for (const move of candidates) {
+            for (const move of limitedCandidates) {
                 this.board[move.row][move.col] = 2;
                 const score = this.minimax(depth - 1, false, alpha, beta);
                 this.board[move.row][move.col] = 0;
@@ -216,10 +257,15 @@ class GomokuGame {
                 alpha = Math.max(alpha, score);
                 if (beta <= alpha) break; // Beta剪枝
             }
+
+            // 存入置换表
+            if (this.transpositionTable.size < this.maxCacheSize) {
+                this.transpositionTable.set(cacheKey, maxScore);
+            }
             return maxScore;
         } else {
             let minScore = Infinity;
-            for (const move of candidates) {
+            for (const move of limitedCandidates) {
                 this.board[move.row][move.col] = 1;
                 const score = this.minimax(depth - 1, true, alpha, beta);
                 this.board[move.row][move.col] = 0;
@@ -227,6 +273,11 @@ class GomokuGame {
                 minScore = Math.min(minScore, score);
                 beta = Math.min(beta, score);
                 if (beta <= alpha) break; // Alpha剪枝
+            }
+
+            // 存入置换表
+            if (this.transpositionTable.size < this.maxCacheSize) {
+                this.transpositionTable.set(cacheKey, minScore);
             }
             return minScore;
         }
@@ -496,7 +547,8 @@ class GomokuGame {
 
     getCandidateMoves() {
         const candidates = new Set();
-        const range = 2;
+        // 性能优化：将搜索范围从2降到1，大幅减少候选移动数量
+        const range = 1;
 
         for (let i = 0; i < this.boardSize; i++) {
             for (let j = 0; j < this.boardSize; j++) {
