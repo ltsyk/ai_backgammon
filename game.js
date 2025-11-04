@@ -634,15 +634,6 @@ class GomokuGame {
                           this.moveHistory[this.moveHistory.length - 1].row === row &&
                           this.moveHistory[this.moveHistory.length - 1].col === col;
 
-        // 如果是最新落子，绘制外圈高亮
-        if (isLastMove) {
-            ctx.beginPath();
-            ctx.arc(x, y, radius + 4, 0, Math.PI * 2);
-            ctx.strokeStyle = player === 1 ? '#ff0000' : '#00ff00';
-            ctx.lineWidth = 3;
-            ctx.stroke();
-        }
-
         // 绘制棋子阴影
         ctx.beginPath();
         ctx.arc(x + 2, y + 2, radius, 0, Math.PI * 2);
@@ -672,17 +663,12 @@ class GomokuGame {
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // 标记最后一步 - 在棋子中心画一个更明显的标记
+        // 标记最后一步 - 在棋子中心画一个简洁的白色圆点
         if (isLastMove) {
-            // 绘制正方形标记
-            ctx.fillStyle = player === 1 ? '#ff0000' : '#00ff00';
-            const markSize = 8;
-            ctx.fillRect(x - markSize / 2, y - markSize / 2, markSize, markSize);
-
-            // 添加白色边框使标记更清晰
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(x - markSize / 2, y - markSize / 2, markSize, markSize);
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
         }
     }
 
