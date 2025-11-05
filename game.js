@@ -81,7 +81,9 @@ class GomokuGame {
     makeMove(row, col) {
         this.board[row][col] = this.currentPlayer;
         this.moveHistory.push({ row, col, player: this.currentPlayer });
-        this.drawPiece(row, col, this.currentPlayer);
+
+        // 重新绘制整个棋盘以更新标记显示
+        this.redrawBoard();
 
         if (this.checkWin(row, col)) {
             this.gameOver = true;
@@ -741,6 +743,16 @@ class GomokuGame {
         }
     }
 
+    redrawBoard() {
+        // 重新绘制棋盘底板
+        this.drawBoard();
+
+        // 重新绘制所有棋子
+        for (const move of this.moveHistory) {
+            this.drawPiece(move.row, move.col, move.player);
+        }
+    }
+
     updateStatus(message, isWin = false) {
         const statusEl = document.getElementById('status');
         statusEl.textContent = message;
@@ -768,12 +780,9 @@ class GomokuGame {
 
         this.currentPlayer = 1;
         this.gameOver = false;
-        this.drawBoard();
 
-        // 重新绘制所有棋子
-        for (const move of this.moveHistory) {
-            this.drawPiece(move.row, move.col, move.player);
-        }
+        // 重新绘制整个棋盘
+        this.redrawBoard();
 
         this.updateStatus('已悔棋，请继续');
     }
