@@ -11,11 +11,11 @@ class GomokuGame {
 
         // 性能优化：置换表缓存
         this.transpositionTable = new Map();
-        this.maxCacheSize = 100000;
+        this.maxCacheSize = 200000; // 扩大缓存容量
 
-        // 性能优化：搜索时间限制
+        // AI增强：延长搜索时间限制
         this.searchStartTime = 0;
-        this.maxSearchTime = 5000; // 增强AI：最多5秒
+        this.maxSearchTime = 30000; // 最多30秒，不限制AI思考
 
         // 初始化画布
         this.canvas = document.getElementById('board');
@@ -137,19 +137,19 @@ class GomokuGame {
         return emptyCells[Math.floor(Math.random() * emptyCells.length)];
     }
 
-    // 中等AI：使用Minimax算法（动态深度）
+    // 中等AI：使用Minimax算法（增强深度）
     getMediumMove() {
         const moveCount = this.moveHistory.length;
-        // 根据棋子数量动态调整深度
-        const depth = moveCount < 8 ? 2 : moveCount < 16 ? 3 : 3;
+        // 中等AI增强：深度4-5层
+        const depth = moveCount < 8 ? 4 : moveCount < 16 ? 5 : 5;
         return this.minimaxSearch(depth);
     }
 
-    // 困难AI：使用深度Minimax + Alpha-Beta剪枝（动态深度，增强版）
+    // 困难AI：顶级Minimax + Alpha-Beta剪枝（超强深度）
     getHardMove() {
         const moveCount = this.moveHistory.length;
-        // 增强AI深度：早期3层，中期4层，后期5层
-        const depth = moveCount < 6 ? 3 : moveCount < 12 ? 4 : 5;
+        // 顶级AI：早期6层，中期7层，后期8层
+        const depth = moveCount < 6 ? 6 : moveCount < 12 ? 7 : 8;
         return this.minimaxSearch(depth);
     }
 
@@ -178,20 +178,43 @@ class GomokuGame {
             this.board[move.row][move.col] = 0;
         }
 
-        // 增强VCF搜索：只在候选较少且有威胁时执行
-        if (candidates.length <= 25 && this.moveHistory.length >= 8) {
-            const vcfMove = this.searchVCF(2, 3);
+        // 顶级VCF搜索：无条件执行，深度更高
+        if (this.moveHistory.length >= 6) {
+            const vcfMove = this.searchVCF(2, 6); // 深度6层VCF
             if (vcfMove) return vcfMove;
 
-            const defenseVCF = this.searchVCF(1, 3);
+            const defenseVCF = this.searchVCF(1, 6); // 防守也用6层
             if (defenseVCF) return defenseVCF;
+        }
+
+        // 检查活三威胁
+        for (const move of candidates) {
+            this.board[move.row][move.col] = 2;
+            const threats = this.getThreatLevel(move.row, move.col, 2);
+            this.board[move.row][move.col] = 0;
+
+            // 如果能形成双活三，立即采用
+            if (threats.liveThree >= 2) {
+                return move;
+            }
+        }
+
+        // 防守对手双活三
+        for (const move of candidates) {
+            this.board[move.row][move.col] = 1;
+            const threats = this.getThreatLevel(move.row, move.col, 1);
+            this.board[move.row][move.col] = 0;
+
+            if (threats.liveThree >= 2) {
+                return move;
+            }
         }
 
         // 移动排序：按威胁值排序，优化Alpha-Beta剪枝效率
         const sortedMoves = this.sortMovesByThreat(candidates);
 
-        // 增强：扩大搜索范围，考虑更多候选移动
-        const topMoves = sortedMoves.slice(0, Math.min(30, sortedMoves.length));
+        // 顶级AI：搜索所有候选移动，不设上限
+        const topMoves = sortedMoves;
 
         let bestMove = topMoves[0];
         let bestScore = -Infinity;
@@ -254,8 +277,8 @@ class GomokuGame {
 
         const candidates = this.getCandidateMoves();
 
-        // 增强：扩大候选移动数量
-        const limitedCandidates = candidates.slice(0, Math.min(20, candidates.length));
+        // 顶级AI：使用所有候选移动，不限制
+        const limitedCandidates = candidates;
 
         if (isMaximizing) {
             let maxScore = -Infinity;
@@ -558,9 +581,8 @@ class GomokuGame {
 
     getCandidateMoves() {
         const candidates = new Set();
-        // 增强：动态调整搜索范围，早期用1，中后期用2
-        const moveCount = this.moveHistory.length;
-        const range = moveCount < 10 ? 1 : 2;
+        // 顶级AI：固定使用2格范围，确保全面覆盖
+        const range = 2;
 
         for (let i = 0; i < this.boardSize; i++) {
             for (let j = 0; j < this.boardSize; j++) {
